@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS VPC Peering Lab</title>
+<meta name="description" content="Two private VPCs, one peering connection, a bastion host and Terraform. Toggle the peering route and ICMP rule to see what breaks.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f6f9; --surface:#fff; --ink:#0a1330; --muted:#53607a; --line:#d5dde7;
+  --a:#0b8fd6; --a-soft:#e3f2fb; --b:#5a7d1a; --b-soft:#eaf3dc; --bad:#b3261e; --term:#0a1330; --term-ink:#dbe6f3;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1020; --surface:#121a30; --ink:#e8eef8; --muted:#9aa8c2; --line:#26314d;
+    --a:#4cb4f0; --a-soft:#10283b; --b:#9bc45a; --b-soft:#1b2a12; --bad:#ff8a80; --term:#050a18; --term-ink:#dbe6f3;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+a{color:var(--a)} :focus-visible{outline:3px solid var(--a);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header.top{padding:28px 0 8px;display:flex;gap:16px;justify-content:space-between;align-items:baseline;flex-wrap:wrap}
+header.top b{font-weight:600} nav a{margin-left:18px;color:var(--muted);text-decoration:none} nav a:hover{color:var(--ink)}
+h1{font-size:clamp(2.1rem,5vw,3.4rem);line-height:1.08;letter-spacing:-.02em;margin:28px 0 14px;font-weight:600;max-width:16ch}
+h2{font-size:1.5rem;margin:0 0 6px;letter-spacing:-.01em;font-weight:600}
+h3{font-size:1.02rem;margin:26px 0 8px;font-weight:600}
+p{margin:0 0 12px;max-width:68ch} .lede{font-size:1.15rem;color:var(--muted);max-width:52ch}
+code,.m{font-family:var(--mono);font-size:.9em}
+section{padding:44px 0;border-top:1px solid var(--line)}
+.hero{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:36px;align-items:start;padding-bottom:48px}
+@media (max-width:860px){.hero{grid-template-columns:1fr}}
+/* simulator */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sim .controls{display:flex;flex-wrap:wrap;gap:10px 22px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.sw{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.95rem}
+.sw input{position:absolute;opacity:0}
+.sw .track{width:40px;height:22px;border-radius:11px;background:var(--line);position:relative;transition:background .15s}
+.sw .track::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw input:checked+.track{background:var(--a)} .sw input:checked+.track::after{transform:translateX(18px)}
+.sw input:focus-visible+.track{outline:3px solid var(--a);outline-offset:2px}
+.sw small{display:block;color:var(--muted);font-family:var(--mono);font-size:.74rem;line-height:1.2}
+.sim svg{display:block;width:100%;height:auto;background:var(--bg)}
+.term{background:var(--term);color:var(--term-ink);font:13px/1.55 var(--mono);padding:14px 16px;margin:0;min-height:150px;white-space:pre-wrap;overflow-wrap:anywhere}
+.term .ok{color:#8fd694} .term .bad{color:#ff9a92} .term .dim{color:#8896b3}
+.note{font-size:.84rem;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line);margin:0;max-width:none}
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:8px 0 6px}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{text-align:left;padding:8px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;background:var(--a-soft)} tr:last-child td{border-bottom:0}
+td.m{font-family:var(--mono)}
+tr.pcx td{background:var(--b-soft)} tr.pcx.off td{opacity:.35;text-decoration:line-through}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px}
+pre.code{background:var(--term);color:var(--term-ink);padding:14px 16px;border-radius:8px;overflow-x:auto;font:13px/1.6 var(--mono);margin:8px 0}
+ul.points{padding-left:1.1em;max-width:70ch} ul.points li{margin:0 0 9px}
+img.arch{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+footer{padding:30px 0 50px;color:var(--muted);font-size:.9rem;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <b>aws-vpc-peering-lab</b>
+  <nav><a href="#build">Build</a><a href="#routes">Routes</a><a href="#tests">Tests</a><a href="#run">Run it</a></nav>
+</header>
+
+<div class="hero">
+  <div>
+    <h1>Two private VPCs, one peering link</h1>
+    <p class="lede">A bastion host, explicit route tables and tightly scoped security groups prove that App-A and App-B can talk over private IPs. Built by hand in the console first, then written in Terraform.</p>
+    <p>Peering alone doesn’t make a ping work. Switch the two settings on the right and watch which one breaks it.</p>
+  </div>
+
+  <div class="sim" aria-label="Peering simulator">
+    <div class="controls">
+      <label class="sw"><input type="checkbox" id="peer" checked><span class="track"></span><span>Peering and routes<small>enable_peering</small></span></label>
+      <label class="sw"><input type="checkbox" id="icmp" checked><span class="track"></span><span>App-B allows ICMP<small>enable_app_b_icmp_rule</small></span></label>
+    </div>
+    <svg viewBox="0 0 520 190" role="img" aria-labelledby="simt">
+      <title id="simt">App-A in VPC A connects to App-B in VPC B through a peering link</title>
+      <rect x="8" y="8" width="230" height="174" rx="10" fill="var(--a-soft)" stroke="var(--a)"/>
+      <rect x="282" y="8" width="230" height="174" rx="10" fill="var(--b-soft)" stroke="var(--b)"/>
+      <g fill="var(--ink)" font-family="IBM Plex Sans,system-ui,sans-serif" font-size="13">
+        <text x="20" y="30" font-weight="600">VPC A</text><text x="294" y="30" font-weight="600">VPC B</text>
+        <text x="20" y="46" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--muted)">10.10.0.0/16</text>
+        <text x="294" y="46" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--muted)">10.20.0.0/16</text>
+      </g>
+      <rect x="24" y="70" width="198" height="42" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="36" y="88" font-size="13" font-weight="600" fill="var(--ink)" font-family="IBM Plex Sans,system-ui,sans-serif">ewb-bastion</text>
+      <text x="36" y="104" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">10.10.1.10 public</text>
+      <rect x="24" y="126" width="198" height="42" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="36" y="144" font-size="13" font-weight="600" fill="var(--ink)" font-family="IBM Plex Sans,system-ui,sans-serif">ewb-app-a</text>
+      <text x="36" y="160" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">10.10.2.10 private</text>
+      <rect x="298" y="126" width="198" height="42" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="310" y="144" font-size="13" font-weight="600" fill="var(--ink)" font-family="IBM Plex Sans,system-ui,sans-serif">ewb-app-b</text>
+      <text x="310" y="160" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono,monospace">10.20.1.10 private</text>
+      <line id="link" x1="222" y1="147" x2="298" y2="147" stroke="var(--b)" stroke-width="4"/>
+      <text id="linklab" x="260" y="136" text-anchor="middle" font-size="10" fill="var(--b)" font-family="IBM Plex Mono,monospace">pcx</text>
+      <g id="shield"><rect x="470" y="112" width="30" height="16" rx="4" fill="var(--b)"/><text x="485" y="124" text-anchor="middle" font-size="10" fill="#fff" font-family="IBM Plex Mono,monospace">ICMP</text></g>
+    </svg>
+    <pre class="term" id="term" aria-live="polite"></pre>
+    <p class="note">Illustrative output for the lab’s logic. Capture your own real output for the evidence folder.</p>
+  </div>
+</div>
+
+<section id="build">
+  <h2>Architecture</h2>
+  <p>Administration goes laptop, bastion, then App-A or App-B over SSH ProxyJump. Project traffic goes App-A to App-B over private IPs through the peering connection.</p>
+  <img class="arch" src="docs/architecture.svg" alt="Diagram: laptop reaches the internet gateway and bastion in VPC A; App-A in VPC A and App-B in VPC B are linked by a peering connection">
+  <h3>Design points</h3>
+  <ul class="points">
+    <li>VPC CIDRs must not overlap: <code>10.10.0.0/16</code> and <code>10.20.0.0/16</code>.</li>
+    <li>Routes are needed on <strong>both</strong> sides of the peering.</li>
+    <li>The bastion’s public subnet also needs the <code>10.20.0.0/16</code> peering route. ProxyJump makes the bastion open the connection to App-B, and the more specific route wins over <code>0.0.0.0/0</code>.</li>
+    <li>App-B’s SSH rule allows the bastion’s <strong>private</strong> IP, because that is the source App-B sees.</li>
+    <li>Peering is one-to-one and non-transitive. VPC B gets no internet access through VPC A.</li>
+    <li>Private instances have no public IP and there is no NAT gateway.</li>
+  </ul>
+</section>
+
+<section id="routes">
+  <h2>Address plan and routes</h2>
+  <div class="tw"><table>
+    <tr><th>Resource</th><th>Location</th><th>CIDR / address</th></tr>
+    <tr><td>ewb-vpc-a</td><td>VPC A</td><td class="m">10.10.0.0/16</td></tr>
+    <tr><td>ewb-a-public</td><td>VPC A, public</td><td class="m">10.10.1.0/24</td></tr>
+    <tr><td>ewb-a-private</td><td>VPC A, private</td><td class="m">10.10.2.0/24</td></tr>
+    <tr><td>ewb-vpc-b</td><td>VPC B</td><td class="m">10.20.0.0/16</td></tr>
+    <tr><td>ewb-b-private</td><td>VPC B, private</td><td class="m">10.20.1.0/24</td></tr>
+    <tr><td>ewb-bastion</td><td>ewb-a-public</td><td class="m">10.10.1.10 + public IPv4</td></tr>
+    <tr><td>ewb-app-a</td><td>ewb-a-private</td><td class="m">10.10.2.10 (no public IP)</td></tr>
+    <tr><td>ewb-app-b</td><td>ewb-b-private</td><td class="m">10.20.1.10 (no public IP)</td></tr>
+  </table></div>
+
+  <h3>Route tables <span style="font-weight:400;color:var(--muted)">(peering rows follow the switch above)</span></h3>
+  <div class="cols">
+    <div><b>ewb-rt-a-public</b><div class="tw"><table>
+      <tr><th>Destination</th><th>Target</th></tr>
+      <tr><td class="m">10.10.0.0/16</td><td>local</td></tr>
+      <tr><td class="m">0.0.0.0/0</td><td>igw</td></tr>
+      <tr class="pcx"><td class="m">10.20.0.0/16</td><td>pcx</td></tr></table></div></div>
+    <div><b>ewb-rt-a-private</b><div class="tw"><table>
+      <tr><th>Destination</th><th>Target</th></tr>
+      <tr><td class="m">10.10.0.0/16</td><td>local</td></tr>
+      <tr class="pcx"><td class="m">10.20.0.0/16</td><td>pcx</td></tr></table></div></div>
+    <div><b>ewb-rt-b-private</b><div class="tw"><table>
+      <tr><th>Destination</th><th>Target</th></tr>
+      <tr><td class="m">10.20.0.0/16</td><td>local</td></tr>
+      <tr class="pcx"><td class="m">10.10.0.0/16</td><td>pcx</td></tr></table></div></div>
+  </div>
+
+  <h3>Security group inbound rules</h3>
+  <div class="tw"><table>
+    <tr><th>Security group</th><th>Type / port</th><th>Source</th></tr>
+    <tr><td>ewb-sg-bastion</td><td>SSH / TCP 22</td><td class="m">your public IP /32</td></tr>
+    <tr><td>ewb-sg-app-a</td><td>SSH / TCP 22</td><td class="m">10.10.1.10/32</td></tr>
+    <tr><td>ewb-sg-app-a</td><td>ICMP echo request</td><td class="m">10.20.1.10/32</td></tr>
+    <tr><td>ewb-sg-app-b</td><td>SSH / TCP 22</td><td class="m">10.10.1.10/32</td></tr>
+    <tr class="icmp"><td>ewb-sg-app-b</td><td>ICMP echo request</td><td class="m">10.10.2.10/32</td></tr>
+  </table></div>
+</section>
+
+<section id="tests">
+  <h2>Tests</h2>
+  <p>Record real output for every test and label each screenshot with host, test and result.</p>
+  <div class="tw"><table>
+    <tr><th>#</th><th>Test</th><th>Where / command</th><th>Expected</th></tr>
+    <tr><td>01</td><td>Baseline (no peering)</td><td class="m">App-A: ping -c 4 10.20.1.10</td><td>No replies</td></tr>
+    <tr><td>02</td><td>Forward path</td><td class="m">App-A: ping -c 4 10.20.1.10</td><td>4 replies, 0% loss</td></tr>
+    <tr><td>03</td><td>Reverse path</td><td class="m">App-B: ping -c 4 10.10.2.10</td><td>4 replies, 0% loss</td></tr>
+    <tr><td>04</td><td>Private SSH</td><td class="m">Laptop: ssh ewb-app-b</td><td>Shell on App-B via bastion</td></tr>
+    <tr><td>05</td><td>Isolation</td><td>EC2 console</td><td>No public IPv4 on App-A / App-B</td></tr>
+    <tr><td>06</td><td>Controlled failure</td><td>Remove App-B ICMP rule, ping from App-A</td><td>Replies stop, then resume after restore</td></tr>
+  </table></div>
+  <h3>Questions to be able to answer</h3>
+  <ul class="points">
+    <li>Why is the return route needed?</li>
+    <li>Why is the App-B SSH source the bastion’s private IP?</li>
+    <li>Why does an Active peering not guarantee a successful ping?</li>
+    <li>Can VPC B use VPC A’s internet gateway over peering?</li>
+  </ul>
+</section>
+
+<section id="run">
+  <h2>Run it with Terraform</h2>
+  <p>Needs Terraform 1.5 or later, AWS credentials for a lab account, and an existing EC2 key pair named <code>ewb-lab</code>.</p>
+  <div class="cols">
+    <div>
+      <pre class="code">cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# edit: name, your IP /32
+terraform init
+terraform plan
+terraform apply</pre>
+      <pre class="code"># Baseline (test 01)
+terraform apply -var enable_peering=false
+# Connect the VPCs (tests 02-05)
+terraform apply -var enable_peering=true
+# Controlled failure (test 06)
+terraform apply -var enable_app_b_icmp_rule=false
+terraform apply -var enable_app_b_icmp_rule=true</pre>
+    </div>
+    <div>
+      <pre class="code">Host ewb-bastion
+    HostName BASTION_PUBLIC_IP
+    User ec2-user
+    IdentityFile ~/.ssh/ewb-lab.pem
+    IdentitiesOnly yes
+
+Host ewb-app-a
+    HostName 10.10.2.10
+    ProxyJump ewb-bastion
+    # same User / IdentityFile as above
+
+Host ewb-app-b
+    HostName 10.20.1.10
+    ProxyJump ewb-bastion
+    # same User / IdentityFile as above</pre>
+    </div>
+  </div>
+  <h3>Cleanup</h3>
+  <p>Run <code>terraform destroy</code>, then check the console (filter by tag <code>Project = EWB-VPC-Peering</code>) for leftover instances, volumes, public IPv4 addresses or VPC resources. EC2, EBS and public IPv4 can incur charges.</p>
+</section>
+
+<footer>MIT licensed. SSH is never opened to <code>0.0.0.0/0</code>; Terraform rejects it through variable validation. Based on the EWB Courses “AWS VPC Peering” student project workbook.</footer>
+</div>
+
+<script>
+(function(){
+  var peer=document.getElementById('peer'), icmp=document.getElementById('icmp'),
+      term=document.getElementById('term'), link=document.getElementById('link'),
+      lab=document.getElementById('linklab'), shield=document.getElementById('shield');
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+  function render(){
+    var p=peer.checked, i=icmp.checked, ok=p&&i;
+    link.setAttribute('stroke-dasharray', p?'':'4 6');
+    link.setAttribute('stroke', p?'var(--b)':'var(--bad)');
+    lab.textContent = p?'pcx':'no peering'; lab.setAttribute('fill', p?'var(--b)':'var(--bad)');
+    shield.querySelector('rect').setAttribute('fill', i?'var(--b)':'var(--bad)');
+    shield.querySelector('text').textContent = i?'ICMP':'no ICMP';
+    shield.querySelector('rect').setAttribute('width', i?30:44);
+    shield.querySelector('rect').setAttribute('x', i?470:456);
+    shield.querySelector('text').setAttribute('x', i?485:478);
+    document.querySelectorAll('tr.pcx').forEach(function(r){r.classList.toggle('off',!p)});
+    document.querySelectorAll('tr.icmp').forEach(function(r){r.style.opacity=i?1:.35;r.style.textDecoration=i?'none':'line-through'});
+    var out='<span class="dim">[ec2-user@ewb-app-a ~]$</span> ping -c 4 10.20.1.10\nPING 10.20.1.10 (10.20.1.10) 56(84) bytes of data.\n';
+    if(ok){
+      for(var n=1;n<=4;n++) out+='64 bytes from 10.20.1.10: icmp_seq='+n+' ttl=64 time=1.'+(n+1)+' ms\n';
+      out=out.replace(/(64 bytes[^\n]*\n)/g,'<span class="ok">$1</span>');
+      out+='\n--- 10.20.1.10 ping statistics ---\n4 packets transmitted, 4 received, <span class="ok">0% packet loss</span>';
+    }else{
+      out+='\n--- 10.20.1.10 ping statistics ---\n4 packets transmitted, 0 received, <span class="bad">100% packet loss</span>\n\n';
+      out+='<span class="dim">'+(!p
+        ? 'Why: ewb-rt-a-private has no route to 10.20.0.0/16, so the VPC drops the packet.'
+        : 'Why: the route exists and the peering is Active, but ewb-sg-app-b drops the echo request.')+'</span>';
+    }
+    term.innerHTML=out;
+  }
+  peer.addEventListener('change',render); icmp.addEventListener('change',render); render();
+})();
+</script>
+</body>
+</html>

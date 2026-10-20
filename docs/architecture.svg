@@ -1,0 +1,68 @@
+<svg viewBox="0 0 800 560" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif" font-size="14">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0b8fd6"/>
+    </marker>
+  </defs>
+  <rect width="800" height="560" fill="#ffffff"/>
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#0a1330">AWS VPC Peering Lab</text>
+
+  <!-- Laptop -->
+  <rect x="290" y="48" width="220" height="52" rx="8" fill="#f4efe7" stroke="#c9c2b6"/>
+  <text x="400" y="70" text-anchor="middle" fill="#0a1330" font-weight="bold">Your laptop</text>
+  <text x="400" y="88" text-anchor="middle" fill="#555" font-size="12">Local key + SSH config</text>
+
+  <!-- IGW -->
+  <line x1="400" y1="100" x2="400" y2="140" stroke="#0b8fd6" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="412" y="124" fill="#0b8fd6" font-size="12">SSH / 22</text>
+  <rect x="290" y="142" width="220" height="48" rx="8" fill="#f4efe7" stroke="#c9c2b6"/>
+  <text x="400" y="163" text-anchor="middle" fill="#0a1330" font-weight="bold">Internet gateway</text>
+  <text x="400" y="180" text-anchor="middle" fill="#555" font-size="12">ewb-igw-a (attached to VPC A)</text>
+
+  <!-- VPC A -->
+  <rect x="30" y="220" width="370" height="310" rx="12" fill="#eef7fc" stroke="#8cc7e6" stroke-width="2"/>
+  <text x="46" y="246" font-weight="bold" fill="#0a1330" font-size="16">VPC A  ewb-vpc-a</text>
+  <text x="46" y="264" fill="#555" font-family="monospace">10.10.0.0/16</text>
+
+  <rect x="50" y="280" width="330" height="90" rx="8" fill="#e3f2fb" stroke="#b5d9ec"/>
+  <text x="64" y="302" font-weight="bold" fill="#0a1330">Public subnet  ewb-a-public</text>
+  <text x="64" y="320" fill="#555" font-family="monospace" font-size="12">10.10.1.0/24</text>
+  <text x="64" y="340" fill="#0a1330">ewb-bastion</text>
+  <text x="64" y="357" fill="#555" font-family="monospace" font-size="12">10.10.1.10 + public IPv4</text>
+
+  <rect x="50" y="420" width="330" height="90" rx="8" fill="#e3f2fb" stroke="#b5d9ec"/>
+  <text x="64" y="442" font-weight="bold" fill="#0a1330">Private subnet  ewb-a-private</text>
+  <text x="64" y="460" fill="#555" font-family="monospace" font-size="12">10.10.2.0/24</text>
+  <text x="64" y="480" fill="#0a1330">ewb-app-a</text>
+  <text x="64" y="497" fill="#555" font-family="monospace" font-size="12">10.10.2.10 (no public IP)</text>
+
+  <!-- IGW to public subnet -->
+  <path d="M 400 190 L 400 205 L 215 205 L 215 278" fill="none" stroke="#0b8fd6" stroke-width="2" marker-end="url(#arr)"/>
+  <!-- bastion to App-A -->
+  <line x1="215" y1="370" x2="215" y2="418" stroke="#0b8fd6" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="225" y="399" fill="#0b8fd6" font-size="12">SSH (local route)</text>
+
+  <!-- VPC B -->
+  <rect x="440" y="220" width="330" height="310" rx="12" fill="#f4f8ee" stroke="#b7cf8b" stroke-width="2"/>
+  <text x="456" y="246" font-weight="bold" fill="#0a1330" font-size="16">VPC B  ewb-vpc-b</text>
+  <text x="456" y="264" fill="#555" font-family="monospace">10.20.0.0/16</text>
+  <text x="456" y="282" fill="#555" font-size="12">No internet gateway</text>
+
+  <rect x="460" y="420" width="290" height="90" rx="8" fill="#eaf3dc" stroke="#c5d9a3"/>
+  <text x="474" y="442" font-weight="bold" fill="#0a1330">Private subnet  ewb-b-private</text>
+  <text x="474" y="460" fill="#555" font-family="monospace" font-size="12">10.20.1.0/24</text>
+  <text x="474" y="480" fill="#0a1330">ewb-app-b</text>
+  <text x="474" y="497" fill="#555" font-family="monospace" font-size="12">10.20.1.10 (no public IP)</text>
+
+  <!-- Bastion to App-B via peering -->
+  <path d="M 380 325 L 420 325 L 420 330 L 605 330 L 605 418" fill="none" stroke="#0b8fd6" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="620" y="380" fill="#0b8fd6" font-size="12">SSH via bastion</text>
+  <text x="620" y="396" fill="#0b8fd6" font-size="12">(ProxyJump)</text>
+
+  <!-- Peering link -->
+  <line x1="380" y1="465" x2="460" y2="465" stroke="#5a7d1a" stroke-width="4"/>
+  <rect x="388" y="452" width="64" height="26" rx="6" fill="#0a1330"/>
+  <text x="420" y="470" text-anchor="middle" fill="#fff" font-size="11">PEERING</text>
+  <text x="420" y="500" text-anchor="middle" fill="#5a7d1a" font-size="11">ewb-a-b-peer</text>
+  <text x="420" y="515" text-anchor="middle" fill="#555" font-size="10">App-A &lt;-&gt; App-B</text>
+</svg>
