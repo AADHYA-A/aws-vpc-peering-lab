@@ -1,6 +1,6 @@
 # AWS VPC Peering Lab
 
-![terraform](https://github.com/AADHYA-A/aws-vpc-peering-lab/actions/workflows/terraform.yml/badge.svg)
+![terraform](https://github.com/AADHYA-A/aws-vpc-peering-lab/workflows/terraform.yml/badge.svg)
 
 Connect two private VPCs with VPC peering and prove private connectivity using
 a bastion host, explicit route tables and tightly scoped security groups.
